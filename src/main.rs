@@ -1,7 +1,8 @@
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::{input::keyboard::KeyboardInput, math::Vec3Swizzles, prelude::*};
 use bevy_editor_pls::EditorPlugin;
-use bevy_rapier3d::{na::Vector3, prelude::*};
+use bevy_rapier3d::{na::ComplexField, prelude::*};
 use rand::Rng;
+use std::f32::consts::PI;
 
 fn main() {
     App::new()
@@ -10,11 +11,13 @@ fn main() {
             brightness: 2.,
         })
         .add_plugins(DefaultPlugins)
+        .add_event::<RollDice>()
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierRenderPlugin)
         .add_plugin(EditorPlugin)
         .add_startup_system(setup)
-        .add_startup_system(spawn_die)
+        .add_system(spawn_die)
+        .add_system(input)
         .run();
 }
 
@@ -29,11 +32,6 @@ fn setup(mut commands: Commands) {
             ..ColliderBundle::default()
         })
         .insert_bundle(RigidBodyBundle {
-            ccd: RigidBodyCcd {
-                ccd_enabled: true,
-                ..RigidBodyCcd::default()
-            }
-            .into(),
             body_type: RigidBodyType::Static.into(),
             ..RigidBodyBundle::default()
         })
@@ -52,11 +50,6 @@ fn setup(mut commands: Commands) {
         })
         .insert_bundle(RigidBodyBundle {
             position: [1., 0., 0.].into(),
-            ccd: RigidBodyCcd {
-                ccd_enabled: true,
-                ..RigidBodyCcd::default()
-            }
-            .into(),
             body_type: RigidBodyType::Static.into(),
             ..RigidBodyBundle::default()
         })
@@ -75,11 +68,6 @@ fn setup(mut commands: Commands) {
         })
         .insert_bundle(RigidBodyBundle {
             position: [-1., 0., 0.].into(),
-            ccd: RigidBodyCcd {
-                ccd_enabled: true,
-                ..RigidBodyCcd::default()
-            }
-            .into(),
             body_type: RigidBodyType::Static.into(),
             ..RigidBodyBundle::default()
         })
@@ -98,11 +86,6 @@ fn setup(mut commands: Commands) {
         })
         .insert_bundle(RigidBodyBundle {
             position: [0., 0., 1.].into(),
-            ccd: RigidBodyCcd {
-                ccd_enabled: true,
-                ..RigidBodyCcd::default()
-            }
-            .into(),
             body_type: RigidBodyType::Static.into(),
             ..RigidBodyBundle::default()
         })
@@ -121,11 +104,6 @@ fn setup(mut commands: Commands) {
         })
         .insert_bundle(RigidBodyBundle {
             position: [0., 0., -1.].into(),
-            ccd: RigidBodyCcd {
-                ccd_enabled: true,
-                ..RigidBodyCcd::default()
-            }
-            .into(),
             body_type: RigidBodyType::Static.into(),
             ..RigidBodyBundle::default()
         })
@@ -139,41 +117,71 @@ fn setup(mut commands: Commands) {
         ));
 }
 
-fn spawn_die(mut commands: Commands) {
-    commands
-        .spawn_bundle(ColliderBundle {
-            shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
-            ..ColliderBundle::default()
-        })
-        .insert_bundle(RigidBodyBundle {
-            position: [0., 2., 0.].into(),
-            ccd: RigidBodyCcd {
-                ccd_enabled: true,
-                ..RigidBodyCcd::default()
-            }
-            .into(),
-            velocity: RigidBodyVelocity {
-                // Flatten the linvel so the die doesn't go up or down
-                linvel: (random_vector(100.).xz().extend(0.).xzy().normalize() * 100.).into(),
-                angvel: random_vector(100.).into(),
-            }
-            .into(),
-            ..RigidBodyBundle::default()
-        })
-        .insert_bundle((
-            RigidBodyPositionSync::Discrete,
-            ColliderDebugRender { color: Color::RED },
-            Transform::default(),
-            GlobalTransform::default(),
-        ));
+fn spawn_die(mut commands: Commands, mut events: EventReader<RollDice>) {
+    for RollDice(dice) in events.iter() {
+        for die in dice {
+            match die {
+                DieType::D6 => commands
+                    .spawn_bundle(ColliderBundle {
+                        shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
+                        ..ColliderBundle::default()
+                    })
+                    .insert_bundle(RigidBodyBundle {
+                        position: [0., 2., 0.].into(),
+                        velocity: RigidBodyVelocity {
+                            // Flatten the linvel so the die doesn't go up or down
+                            linvel: (random_vector(10.).xz().extend(0.).xzy().normalize() * 10.)
+                                .into(),
+                            angvel: random_vector(100.).into(),
+                        }
+                        .into(),
+                        ..RigidBodyBundle::default()
+                    })
+                    .insert_bundle((
+                        RigidBodyPositionSync::Discrete,
+                        ColliderDebugRender { color: Color::RED },
+                        Transform::default(),
+                        GlobalTransform::default(),
+                    )),
+            };
+        }
+    }
+}
+
+fn input(mut events: EventWriter<RollDice>, mut input_events: EventReader<KeyboardInput>) {
+    use bevy::input::ElementState;
+
+    for ev in input_events.iter() {
+        if let KeyboardInput {
+            state: ElementState::Pressed,
+            key_code: Some(KeyCode::Space),
+            ..
+        } = ev
+        {
+            events.send(RollDice(vec![DieType::D6]));
+        }
+    }
 }
 
 fn random_vector(length: f32) -> Vec3 {
+    use rand::thread_rng;
+
+    let phi = thread_rng().gen_range(0.0..=PI * 2.0);
+    let cos_theta = thread_rng().gen_range(-1.0..=1.0);
+
+    let theta = cos_theta.acos();
+
     Vec3::new(
-        rand::thread_rng().gen(),
-        rand::thread_rng().gen(),
-        rand::thread_rng().gen(),
+        theta.sin() * phi.cos(),
+        theta.sin() * phi.sin(),
+        theta.cos(),
     )
     .normalize()
         * length
+}
+
+pub struct RollDice(Vec<DieType>);
+
+pub enum DieType {
+    D6,
 }
