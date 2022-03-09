@@ -1,6 +1,7 @@
-use bevy::prelude::*;
+use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_editor_pls::EditorPlugin;
-use bevy_rapier3d::prelude::*;
+use bevy_rapier3d::{na::Vector3, prelude::*};
+use rand::Rng;
 
 fn main() {
     App::new()
@@ -18,10 +19,9 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(0., 20., 0.1).looking_at(Vec3::new(0., 0., 0.), Vec3::Y),
-        ..PerspectiveCameraBundle::default()
-    });
+    let mut camera = OrthographicCameraBundle::new_3d();
+    camera.transform = Transform::from_xyz(0., 10., 0.1).looking_at(Vec3::new(0., 0., 0.), Vec3::Y);
+    commands.spawn_bundle(camera);
 
     commands
         .spawn_bundle(ColliderBundle {
@@ -51,7 +51,7 @@ fn setup(mut commands: Commands) {
             ..ColliderBundle::default()
         })
         .insert_bundle(RigidBodyBundle {
-            position: [15., 0., 0.].into(),
+            position: [1., 0., 0.].into(),
             ccd: RigidBodyCcd {
                 ccd_enabled: true,
                 ..RigidBodyCcd::default()
@@ -74,7 +74,7 @@ fn setup(mut commands: Commands) {
             ..ColliderBundle::default()
         })
         .insert_bundle(RigidBodyBundle {
-            position: [-15., 0., 0.].into(),
+            position: [-1., 0., 0.].into(),
             ccd: RigidBodyCcd {
                 ccd_enabled: true,
                 ..RigidBodyCcd::default()
@@ -97,7 +97,7 @@ fn setup(mut commands: Commands) {
             ..ColliderBundle::default()
         })
         .insert_bundle(RigidBodyBundle {
-            position: [0., 0., 8.].into(),
+            position: [0., 0., 1.].into(),
             ccd: RigidBodyCcd {
                 ccd_enabled: true,
                 ..RigidBodyCcd::default()
@@ -120,7 +120,7 @@ fn setup(mut commands: Commands) {
             ..ColliderBundle::default()
         })
         .insert_bundle(RigidBodyBundle {
-            position: [0., 0., -8.].into(),
+            position: [0., 0., -1.].into(),
             ccd: RigidBodyCcd {
                 ccd_enabled: true,
                 ..RigidBodyCcd::default()
@@ -142,14 +142,20 @@ fn setup(mut commands: Commands) {
 fn spawn_die(mut commands: Commands) {
     commands
         .spawn_bundle(ColliderBundle {
-            shape: ColliderShape::cuboid(0.5, 0.5, 0.5).into(),
+            shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
             ..ColliderBundle::default()
         })
         .insert_bundle(RigidBodyBundle {
-            position: [0., 3., 0.].into(),
+            position: [0., 2., 0.].into(),
             ccd: RigidBodyCcd {
                 ccd_enabled: true,
                 ..RigidBodyCcd::default()
+            }
+            .into(),
+            velocity: RigidBodyVelocity {
+                // Flatten the linvel so the die doesn't go up or down
+                linvel: (random_vector(100.).xz().extend(0.).xzy().normalize() * 100.).into(),
+                angvel: random_vector(100.).into(),
             }
             .into(),
             ..RigidBodyBundle::default()
@@ -160,4 +166,14 @@ fn spawn_die(mut commands: Commands) {
             Transform::default(),
             GlobalTransform::default(),
         ));
+}
+
+fn random_vector(length: f32) -> Vec3 {
+    Vec3::new(
+        rand::thread_rng().gen(),
+        rand::thread_rng().gen(),
+        rand::thread_rng().gen(),
+    )
+    .normalize()
+        * length
 }

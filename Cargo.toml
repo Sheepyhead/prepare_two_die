@@ -9,3 +9,10 @@ edition = "2021"
 bevy = "0.6.1"
 bevy_rapier3d = "0.12.1"
 bevy_editor_pls = { git = "https://github.com/jakobhellermann/bevy_editor_pls", rev = "6cdec7e"}
+rand = "0.8.5"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
