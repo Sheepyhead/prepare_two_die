@@ -2,7 +2,7 @@ use bevy::{input::keyboard::KeyboardInput, math::Vec3Swizzles, prelude::*};
 use bevy_editor_pls::EditorPlugin;
 use bevy_rapier3d::{na::ComplexField, prelude::*};
 use rand::Rng;
-use std::f32::consts::PI;
+use std::{f32::consts::PI, fmt};
 
 fn main() {
     App::new()
@@ -18,6 +18,7 @@ fn main() {
         .add_startup_system(setup)
         .add_system(spawn_die)
         .add_system(input)
+        .add_system(dice_counting)
         .run();
 }
 
@@ -142,6 +143,7 @@ fn spawn_die(mut commands: Commands, mut events: EventReader<RollDice>) {
                         ColliderDebugRender { color: Color::RED },
                         Transform::default(),
                         GlobalTransform::default(),
+                        *die,
                     )),
             };
         }
@@ -182,6 +184,43 @@ fn random_vector(length: f32) -> Vec3 {
 
 pub struct RollDice(Vec<DieType>);
 
+#[derive(Clone, Copy, Component)]
 pub enum DieType {
     D6,
+}
+
+impl fmt::Display for DieType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            DieType::D6 => "d6",
+        })
+    }
+}
+
+impl DieType {
+    fn get_resting_value(&self, (x, y, z): (f32, f32, f32)) -> u32 {
+        match self {
+            DieType::D6 => todo!(),
+        }
+    }
+}
+
+fn dice_counting(
+    mut commands: Commands,
+    dice: Query<(
+        Entity,
+        &DieType,
+        &RigidBodyVelocityComponent,
+        &RigidBodyPositionComponent,
+    )>,
+) {
+    for (entity, die, velocity, position) in dice.iter() {
+        if velocity.is_zero() {
+            let (mut x, _, mut z) = position.position.rotation.euler_angles();
+            x = (x * 10.0).round() / 10.0;
+            z = (z * 10.0).round() / 10.0;
+            println!("{die} landed on value ({},{})", x, z);
+            commands.entity(entity).despawn_recursive();
+        }
+    }
 }
