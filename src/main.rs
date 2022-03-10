@@ -1,6 +1,9 @@
 use bevy::{input::keyboard::KeyboardInput, math::Vec3Swizzles, prelude::*};
 use bevy_editor_pls::EditorPlugin;
-use bevy_rapier3d::{na::ComplexField, prelude::*};
+use bevy_rapier3d::{
+    na::{ComplexField, Vector3},
+    prelude::*,
+};
 use rand::Rng;
 use std::{f32::consts::PI, fmt};
 
@@ -118,33 +121,37 @@ fn setup(mut commands: Commands) {
         ));
 }
 
-fn spawn_die(mut commands: Commands, mut events: EventReader<RollDice>) {
+fn spawn_die(mut commands: Commands, mut events: EventReader<RollDice>, ass: Res<AssetServer>) {
     for RollDice(dice) in events.iter() {
         for die in dice {
             match die {
-                DieType::D6 => commands
-                    .spawn_bundle(ColliderBundle {
-                        shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
-                        ..ColliderBundle::default()
-                    })
-                    .insert_bundle(RigidBodyBundle {
-                        position: [0., 2., 0.].into(),
-                        velocity: RigidBodyVelocity {
-                            // Flatten the linvel so the die doesn't go up or down
-                            linvel: (random_vector(10.).xz().extend(0.).xzy().normalize() * 10.)
-                                .into(),
-                            angvel: random_vector(100.).into(),
-                        }
-                        .into(),
-                        ..RigidBodyBundle::default()
-                    })
-                    .insert_bundle((
-                        RigidBodyPositionSync::Discrete,
-                        ColliderDebugRender { color: Color::RED },
-                        Transform::default(),
-                        GlobalTransform::default(),
-                        *die,
-                    )),
+                DieType::D6 => {
+                    let mut position: RigidBodyPosition = [0., 2., 0.].into();
+                    position.position.rotation = Isometry::rotation(random_vector(PI).into()).rotation;
+                    commands
+                        .spawn_bundle(ColliderBundle {
+                            shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
+                            ..ColliderBundle::default()
+                        })
+                        .insert_bundle(RigidBodyBundle {
+                            position: position.into(),
+                            velocity: RigidBodyVelocity {
+                                // Flatten the linvel so the die doesn't go up or down
+                                linvel: (random_vector(10.).xz().extend(0.).xzy().normalize()
+                                    * 10.)
+                                    .into(),
+                                angvel: random_vector(100.).into(),
+                            }
+                            .into(),
+                            ..RigidBodyBundle::default()
+                        })
+                        .insert_bundle(PbrBundle {
+                            mesh: ass.load("d6.glb#Mesh0/Primitive0"),
+                            material: ass.load("d6.glb#Material0"),
+                            ..PbrBundle::default()
+                        })
+                        .insert_bundle((RigidBodyPositionSync::Discrete, *die))
+                }
             };
         }
     }
@@ -198,9 +205,59 @@ impl fmt::Display for DieType {
 }
 
 impl DieType {
-    fn get_resting_value(&self, (x, y, z): (f32, f32, f32)) -> u32 {
+    fn get_resting_value(&self, (x, _, z): (f32, f32, f32)) -> u32 {
         match self {
-            DieType::D6 => todo!(),
+            DieType::D6 => {
+                // Represents how many different sides you can turn this die across one axis
+                enum SideTurns {
+                    None,
+                    One,
+                    Two,
+                    Three,
+                }
+                impl fmt::Display for SideTurns {
+                    fn fmt(
+                        &self,
+                        f: &mut std::fmt::Formatter<'_>,
+                    ) -> std::result::Result<(), std::fmt::Error> {
+                        f.write_str(match self {
+                            SideTurns::None => "None",
+                            SideTurns::One => "One",
+                            SideTurns::Two => "Two",
+                            SideTurns::Three => "Three",
+                        })
+                    }
+                }
+                let x_turns = match () {
+                    () if x < ((-3.1 + -1.6) / 2.0) => SideTurns::Two,
+                    () if x < ((-1.6 + 0.0) / 2.0) => SideTurns::Three,
+                    () if x < ((0.0 + 1.6) / 2.0) => SideTurns::None,
+                    () if x < ((1.6 + 3.1) / 2.0) => SideTurns::One,
+                    () => SideTurns::Two,
+                };
+                let z_turns = match () {
+                    () if z < ((-3.1 + -1.6) / 2.0) => SideTurns::Two,
+                    () if z < ((-1.6 + 0.0) / 2.0) => SideTurns::Three,
+                    () if z < ((0.0 + 1.6) / 2.0) => SideTurns::None,
+                    () if z < ((1.6 + 3.1) / 2.0) => SideTurns::One,
+                    () => SideTurns::Two,
+                };
+
+                match (x_turns, z_turns) {
+                    (SideTurns::None, SideTurns::One)
+                    | (SideTurns::One, SideTurns::One)
+                    | (SideTurns::Two, SideTurns::One)
+                    | (SideTurns::Three, SideTurns::One) => 1,
+                    (SideTurns::None, SideTurns::None) | (SideTurns::Two, SideTurns::Two) => 2,
+                    (SideTurns::One, SideTurns::None) | (SideTurns::Three, SideTurns::Two) => 3,
+                    (SideTurns::One, SideTurns::Two) | (SideTurns::Three, SideTurns::None) => 4,
+                    (SideTurns::None, SideTurns::Two) | (SideTurns::Two, SideTurns::None) => 5,
+                    (SideTurns::None, SideTurns::Three)
+                    | (SideTurns::One, SideTurns::Three)
+                    | (SideTurns::Two, SideTurns::Three)
+                    | (SideTurns::Three, SideTurns::Three) => 6,
+                }
+            }
         }
     }
 }
@@ -216,10 +273,10 @@ fn dice_counting(
 ) {
     for (entity, die, velocity, position) in dice.iter() {
         if velocity.is_zero() {
-            let (mut x, _, mut z) = position.position.rotation.euler_angles();
-            x = (x * 10.0).round() / 10.0;
-            z = (z * 10.0).round() / 10.0;
-            println!("{die} landed on value ({},{})", x, z);
+            println!(
+                "{die} landed on value {}",
+                die.get_resting_value(position.position.rotation.euler_angles())
+            );
             commands.entity(entity).despawn_recursive();
         }
     }
