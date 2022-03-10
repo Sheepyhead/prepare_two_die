@@ -1,10 +1,8 @@
 use bevy::{input::keyboard::KeyboardInput, math::Vec3Swizzles, prelude::*};
 use bevy_editor_pls::EditorPlugin;
-use bevy_rapier3d::{
-    na::{ComplexField, Vector3},
-    prelude::*,
-};
+use bevy_rapier3d::{na::ComplexField, prelude::*};
 use rand::Rng;
+use regex::{Error, Regex};
 use std::{f32::consts::PI, fmt};
 
 fn main() {
@@ -15,6 +13,7 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_event::<RollDice>()
+        .add_event::<RollDiceCommand>()
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierRenderPlugin)
         .add_plugin(EditorPlugin)
@@ -121,43 +120,57 @@ fn setup(mut commands: Commands) {
         ));
 }
 
-fn spawn_die(mut commands: Commands, mut events: EventReader<RollDice>, ass: Res<AssetServer>) {
-    for RollDice(dice) in events.iter() {
-        for die in dice {
-            match die {
-                DieType::D6 => {
-                    let mut position: RigidBodyPosition = [0., 2., 0.].into();
-                    position.position.rotation = Isometry::rotation(random_vector(PI).into()).rotation;
-                    commands
-                        .spawn_bundle(ColliderBundle {
-                            shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
-                            ..ColliderBundle::default()
-                        })
-                        .insert_bundle(RigidBodyBundle {
-                            position: position.into(),
-                            velocity: RigidBodyVelocity {
-                                // Flatten the linvel so the die doesn't go up or down
-                                linvel: (random_vector(10.).xz().extend(0.).xzy().normalize()
-                                    * 10.)
+fn spawn_die(
+    mut commands: Commands,
+    mut events: EventReader<RollDiceCommand>,
+    ass: Res<AssetServer>,
+) {
+    for command in events.iter() {
+        match command.to_dice() {
+            Ok(dice) => {
+                for die in dice {
+                    match die {
+                        DieType::D6 => {
+                            let mut position: RigidBodyPosition = [0., 2., 0.].into();
+                            position.position.rotation =
+                                Isometry::rotation(random_vector(PI).into()).rotation;
+                            commands
+                                .spawn_bundle(ColliderBundle {
+                                    shape: ColliderShape::cuboid(0.05, 0.05, 0.05).into(),
+                                    ..ColliderBundle::default()
+                                })
+                                .insert_bundle(RigidBodyBundle {
+                                    position: position.into(),
+                                    velocity: RigidBodyVelocity {
+                                        // Flatten the linvel so the die doesn't go up or down
+                                        linvel: (random_vector(10.)
+                                            .xz()
+                                            .extend(0.)
+                                            .xzy()
+                                            .normalize()
+                                            * 10.)
+                                            .into(),
+                                        angvel: random_vector(100.).into(),
+                                    }
                                     .into(),
-                                angvel: random_vector(100.).into(),
-                            }
-                            .into(),
-                            ..RigidBodyBundle::default()
-                        })
-                        .insert_bundle(PbrBundle {
-                            mesh: ass.load("d6.glb#Mesh0/Primitive0"),
-                            material: ass.load("d6.glb#Material0"),
-                            ..PbrBundle::default()
-                        })
-                        .insert_bundle((RigidBodyPositionSync::Discrete, *die))
+                                    ..RigidBodyBundle::default()
+                                })
+                                .insert_bundle(PbrBundle {
+                                    mesh: ass.load("d6.glb#Mesh0/Primitive0"),
+                                    material: ass.load("d6.glb#Material0"),
+                                    ..PbrBundle::default()
+                                })
+                                .insert_bundle((RigidBodyPositionSync::Discrete, die))
+                        }
+                    };
                 }
-            };
+            }
+            Err(err) => println!("{err}"),
         }
     }
 }
 
-fn input(mut events: EventWriter<RollDice>, mut input_events: EventReader<KeyboardInput>) {
+fn input(mut events: EventWriter<RollDiceCommand>, mut input_events: EventReader<KeyboardInput>) {
     use bevy::input::ElementState;
 
     for ev in input_events.iter() {
@@ -167,7 +180,7 @@ fn input(mut events: EventWriter<RollDice>, mut input_events: EventReader<Keyboa
             ..
         } = ev
         {
-            events.send(RollDice(vec![DieType::D6]));
+            events.send(RollDiceCommand::DiceString("1d6".to_string()));
         }
     }
 }
@@ -194,6 +207,17 @@ pub struct RollDice(Vec<DieType>);
 #[derive(Clone, Copy, Component)]
 pub enum DieType {
     D6,
+}
+
+impl TryFrom<u32> for DieType {
+    type Error = String;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            6 => Ok(Self::D6),
+            _ => Err(format!("No such die type: d{value}")),
+        }
+    }
 }
 
 impl fmt::Display for DieType {
@@ -278,6 +302,40 @@ fn dice_counting(
                 die.get_resting_value(position.position.rotation.euler_angles())
             );
             commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
+pub enum RollDiceCommand {
+    DiceString(String),
+    Dice(Vec<DieType>),
+}
+
+impl RollDiceCommand {
+    fn to_dice(&self) -> Result<Vec<DieType>, String> {
+        match self {
+            RollDiceCommand::DiceString(dice) => {
+                let reg = match Regex::new(r"(\d*)d(\d*)") {
+                    Ok(reg) => reg,
+                    Err(Error::CompiledTooBig(size)) => {
+                        return Err(format!("Regex compiled too big, size limit {size}"))
+                    }
+                    Err(Error::Syntax(message)) => return Err(message),
+                    Err(_) => return Err("Unknown regex error occurred".to_string()),
+                };
+                let caps = match reg.captures(dice) {
+                    Some(caps) => caps,
+                    None => return Err(format!("No dice expression detected in '{dice}")),
+                };
+                if caps.len() != 3 {
+                    return Err(format!("No dice expression detected in {dice}"));
+                }
+                let amount = caps.get(1).unwrap().as_str().parse().unwrap();
+                let face =
+                    DieType::try_from(caps.get(2).unwrap().as_str().parse::<u32>().unwrap())?;
+                Ok(vec![face; amount])
+            }
+            RollDiceCommand::Dice(dice) => Ok(dice.iter().copied().collect()),
         }
     }
 }
