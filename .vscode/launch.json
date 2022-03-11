@@ -7,16 +7,16 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'prepare_two_die'",
+      "name": "Debug example 'basic'",
       "cargo": {
         "args": [
           "build",
-          "--bin=prepare_two_die",
+          "--example=basic",
           "--package=prepare_two_die"
         ],
         "filter": {
-          "name": "prepare_two_die",
-          "kind": "bin"
+          "name": "basic",
+          "kind": "example"
         }
       },
       "args": [],
@@ -28,17 +28,36 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in executable 'prepare_two_die'",
+      "name": "Debug unit tests in library 'prepare_two_die'",
       "cargo": {
         "args": [
           "test",
           "--no-run",
-          "--bin=prepare_two_die",
+          "--lib",
           "--package=prepare_two_die"
         ],
         "filter": {
           "name": "prepare_two_die",
-          "kind": "bin"
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in example 'basic'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--example=basic",
+          "--package=prepare_two_die"
+        ],
+        "filter": {
+          "name": "basic",
+          "kind": "example"
         }
       },
       "args": [],
