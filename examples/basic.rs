@@ -1,6 +1,8 @@
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use prepare_two_die::prelude::*;
 
+/// Basic example - Press space to spawn dice 
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)

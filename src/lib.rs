@@ -25,8 +25,7 @@ impl Plugin for DicePlugin {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_startup_system(setup)
         .add_system(spawn_die)
-        .add_system(dice_counting)
-        .run();
+        .add_system(dice_counting);
     }
 }
 
