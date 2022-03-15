@@ -1,3 +1,7 @@
+#![deny(missing_docs, clippy::doc_markdown)]
+
+//! Prepare Two Die - A physics-based dice rolling crate for Bevy
+
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use dice::{DiceResult, RollDice};
@@ -7,11 +11,13 @@ mod dice;
 mod helpers;
 mod systems;
 
+/// Groups the public components and resources for this crate
 pub mod prelude {
     pub use crate::dice::*;
     pub use crate::DicePlugin;
 }
 
+/// The plugin for adding dice rolling to this app
 pub struct DicePlugin;
 
 impl Plugin for DicePlugin {

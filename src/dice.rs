@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use regex::{Error, Regex};
 use std::fmt;
 
+/// The types of dice supported by this crate
 #[derive(Clone, Copy, Component)]
 pub enum DieType {
+    /// Standard cubic six-sided die
     D6,
 }
 
@@ -84,9 +86,15 @@ impl DieType {
     }
 }
 
+/// Command event for rolling one or more dice
 #[allow(dead_code)]
 pub enum RollDice {
+    /// Rolls dice based on a string. A dice string is in the format xdy where x is a positive
+    /// non-zero number representing the number of dice to roll, and y is the number of faces on
+    /// the dice, see supported types in DieType. All other text than xdy is ignored, so text like
+    /// "Arin rolls 3d6 for his strength check" still evaluates to a 3d6 dice roll
     DiceString(String),
+    /// Rolls the dice in the given vector
     Dice(Vec<DieType>),
 }
 
@@ -119,15 +127,19 @@ impl RollDice {
     }
 }
 
+/// The result of a dice roll
 pub struct DiceResult {
+    /// The indidivual dice results
     pub results: Vec<u32>,
 }
 
 impl DiceResult {
+    /// Returns the sum total of all dice rolls in this result
     pub fn total(&self) -> u32 {
         self.results.iter().sum()
     }
 
+    /// Returns the number of dice rolled for this result
     pub fn number_of_dice(&self) -> usize {
         self.results.len()
     }
